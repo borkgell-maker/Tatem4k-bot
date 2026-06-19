@@ -12,6 +12,7 @@ PHOTO_ARCHIVE = "exclusive_builds.jpg"
 ADMIN_PASSWORD = "zpxocivuby123A"
 USERS_FILE = "users.txt"
 BUYERS_FILE = "potential_buyers.txt"
+ADMINS_FILE = "admins.txt"
 
 def read_list(filename):
     if not os.path.exists(filename):
@@ -23,20 +24,47 @@ def save_list(filename, items):
     with open(filename, "w", encoding="utf-8") as f:
         f.write("\n".join(items))
 
-def add_user(user):
-    username = f"@{user.username}" if user.username else f"id:{user.id}"
+def get_username(user):
+    return f"@{user.username}" if user.username else f"id:{user.id}"
+
+def add_admin(user_id):
+    admins = read_list(ADMINS_FILE)
+    if str(user_id) not in admins:
+        admins.append(str(user_id))
+        save_list(ADMINS_FILE, admins)
+
+async def notify_admins(context, text):
+    admins = read_list(ADMINS_FILE)
+    for admin_id in admins:
+        try:
+            await context.bot.send_message(chat_id=int(admin_id), text=text, parse_mode="HTML")
+        except Exception:
+            pass
+
+async def add_user(user, context):
+    username = get_username(user)
     users = read_list(USERS_FILE)
     if username not in users:
         users.append(username)
         save_list(USERS_FILE, users)
+
+        user_ids = read_list("user_ids.txt")
+        if str(user.id) not in user_ids:
+            user_ids.append(str(user.id))
+            save_list("user_ids.txt", user_ids)
+
+        await notify_admins(context, f"🆕 <b>Новый пользователь бота</b>\nЕго юз: <b>{username}</b>")
+
     return len(users)
 
-def add_buyer(user):
-    username = f"@{user.username}" if user.username else f"id:{user.id}"
+async def add_buyer(user, context):
+    username = get_username(user)
     buyers = read_list(BUYERS_FILE)
     if username not in buyers:
         buyers.append(username)
         save_list(BUYERS_FILE, buyers)
+
+        await notify_admins(context, f"💰 У тебя есть новый клиент\nЕго юз: <b>{username}</b>")
 
 def get_counts():
     return len(read_list(USERS_FILE)), len(read_list(BUYERS_FILE))
@@ -62,7 +90,7 @@ async def show_main_menu(message, is_edit=False):
         )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    add_user(update.message.from_user)
+    await add_user(update.message.from_user, context)
     context.user_data.clear()
     await show_main_menu(update.message)
 
@@ -71,7 +99,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "archives":
-        add_buyer(query.from_user)
+        await add_buyer(query.from_user, context)
         keyboard = [
             [InlineKeyboardButton("💳 Приобрести", url="https://t.me/tribute/app?startapp=sX5S")],
             [InlineKeyboardButton("↩️ Назад", callback_data="back_to_menu")],
@@ -146,14 +174,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    # Игнорируем /start и слово "старт"
     if text.lower() in ["старт", "/start"]:
         return
 
-    # Ввод пароля
     if context.user_data.get("waiting_password"):
         context.user_data["waiting_password"] = False
         if text == ADMIN_PASSWORD:
+            add_admin(update.message.from_user.id)
             users_count, buyers_count = get_counts()
             keyboard = [
                 [InlineKeyboardButton("👥 Все пользователи", callback_data="admin_all_users")],
@@ -172,10 +199,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Неверный пароль!")
         return
 
-    # Рассылка
     if context.user_data.get("waiting_broadcast"):
         context.user_data["waiting_broadcast"] = False
-        users = read_list(USERS_FILE)
         sent = 0
         failed = 0
         all_user_ids = read_list("user_ids.txt")
@@ -190,21 +215,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         return
-
-def add_user(user):
-    username = f"@{user.username}" if user.username else f"id:{user.id}"
-    users = read_list(USERS_FILE)
-    if username not in users:
-        users.append(username)
-        save_list(USERS_FILE, users)
-
-    # Сохраняем ID отдельно для рассылки
-    user_ids = read_list("user_ids.txt")
-    if str(user.id) not in user_ids:
-        user_ids.append(str(user.id))
-        save_list("user_ids.txt", user_ids)
-
-    return len(users)
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
