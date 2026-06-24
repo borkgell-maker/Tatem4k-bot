@@ -5,7 +5,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 
 logging.basicConfig(level=logging.INFO)
 
-BOT_TOKEN = "8965750450:AAFFaTpPtnIu9Yi9z8Z7tHFMmNRknLflpPU"
+BOT_TOKEN = "8965750450:AAGXMXjEHVuMX5BibCiSkQFdd_YPQBAXK2M"
 
 PHOTO_MAIN = "tatem4k_logo.png"
 PHOTO_ARCHIVE = "exclusive_builds.jpg"
